@@ -1,0 +1,102 @@
+---
+title: "genpipesAnalysis"
+author: "<center>Jesse islam </center>"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(ggplot2)
+library('dplyr')
+library(DESeq2)
+```
+
+```{r DESeqProcessingFunction}
+deSeqPrep <- function(countData,colData){
+  mode(countData)<-"integer"
+
+  dds <- DESeqDataSetFromMatrix(countData = countData,
+                                        colData=colData,
+                                        design = ~ individual+ treatment)
+  return(DESeq(dds))
+}
+
+```
+
+```{r loadandProcessData, echo=FALSE}
+#get htSeq gene counts
+htSeqGeneCounts <- read_tsv("counts/htSeqGeneCounts.tsv")
+htSeqGeneNames<- htSeqGeneCounts[,c(1,2)]
+htSeqGeneCounts <- as.matrix(htSeqGeneCounts[,-c(1,2)])
+rownames(htSeqGeneCounts)<-htSeqGeneNames$Gene
+individuals<- (ncol(htSeqGeneCounts))/2
+
+#get featurecount gene counts
+fcGeneCounts <- read_delim("counts/featureCounts.gene.csv", 
+    "\t", escape_double = FALSE, trim_ws = TRUE, 
+    skip = 1)
+
+fcGeneNames<- fcGeneCounts[,c(1)]
+fcGeneCounts <- as.matrix(fcGeneCounts[,-c(1:6)])
+rownames(fcGeneCounts)<-fcGeneNames$Geneid
+colnames(fcGeneCounts)<- colnames(htSeqGeneCounts)
+
+
+#get genecounts from stringtie
+stringtieGeneCounts <- dplyr::arrange(read_csv("counts/stringtieGeneCounts.csv")[,-c(2)])
+stringtieGeneNames<- stringtieGeneCounts[,c(1)]
+stringtieGeneCounts <-as.matrix(stringtieGeneCounts[,-c(1)])
+rownames(stringtieGeneCounts)<-stringtieGeneNames$gene_id
+
+#Get geneCounts from txImport
+txIStringtieGeneCounts <- dplyr::arrange(
+  read_csv("counts/tximportStringtieGeneCounts.csv"))
+txIStringtieGeneNames<- txIStringtieGeneCounts[,c(1)]
+txIStringtieGeneCounts <-txIStringtieGeneCounts[,-c(1)]
+txICountPositions<-seq.int(2*individuals+1,4*individuals,1)
+txIStringtieGeneCounts<-as.matrix(txIStringtieGeneCounts[,c(txICountPositions)])
+colnames(txIStringtieGeneCounts)<- colnames(stringtieGeneCounts)
+rownames(txIStringtieGeneCounts)<-txIStringtieGeneNames$X1
+
+#Get transcript counts from stringtie
+stringtieTranscriptCounts <- read_csv("counts/stringtieTranscriptCounts.csv")[,-c(2)]
+stringtieTranscriptNames<-stringtieTranscriptCounts[,c(1)]
+stringtieTranscriptCounts <- as.matrix(stringtieTranscriptCounts[,-c(1)])
+rownames(stringtieTranscriptCounts)<-stringtieTranscriptNames$transcript_id
+
+#getComparisons
+treatmentInfo<- data.frame(individual =
+                             as.factor(c(1:individuals,
+                                         1:individuals)),
+                            treatment =as.factor(c(rep(0,individuals),
+                           rep(1,individuals)))
+                           )
+
+
+
+```
+
+```{r Analyses}
+
+DTEStringtie<-deSeqPrep(stringtieTranscriptCounts,treatmentInfo)
+DGEStringtie<-deSeqPrep(stringtieGeneCounts,treatmentInfo)
+DGEtxiStringtie<-deSeqPrep(txIStringtieGeneCounts,treatmentInfo)
+DGEHTSeq<-deSeqPrep(htSeqGeneCounts,treatmentInfo)
+DGEfc<-deSeqPrep(fcGeneCounts,treatmentInfo)
+
+
+```
+
+
+
